@@ -1,0 +1,135 @@
+package demo_usr.know;
+
+import java.io.IOException;
+
+import us.monoid.json.JSONArray;
+import us.monoid.json.JSONException;
+import us.monoid.json.JSONObject;
+import knowledgeblock.client.*;
+
+import usr.applications.Application;
+import usr.applications.ApplicationResponse;
+
+
+public class InformationSharingNEM extends BasicEntity implements Application {
+	
+	public InformationSharingNEM () {
+		entityid = 10000;
+	}
+	
+	
+	protected void initRegistrationInfo () throws JSONException {
+		registrationInfo = new JSONObject();
+		registrationInfo.put("entityid", entityid);
+		registrationInfo.put("entityname", "IS NEM");
+
+		JSONArray availableArray = new JSONArray();
+		availableArray.put("/BaseStations/Detail/All");
+		availableArray.put("/BaseStations/LoadPerTimeZone/All");
+
+		// specifying the information collection callback URL
+		String icCallBackURL="http://" + restHost + ":" + entityid + "/update/";
+		registrationInfo.put("iccallbackURL", icCallBackURL);
+
+		registrationInfo.put("urisforavailableinformation", availableArray);
+
+        registrationInfo.put("ifpcallbackURL", "http://" + restHost + ":" + entityid + "/update/");
+		
+		// Setting proposed information flow requirements / constraints
+		JSONObject informationflowconstraints = new JSONObject();
+
+		informationflowconstraints.put("minimumInformationSharingRate", 2);
+		informationflowconstraints.put("maximumInformationSharingRate", 5);
+
+		JSONObject performanceGoal = new JSONObject();
+		// Default goal
+		performanceGoal.put("optGoalId", 1);
+		performanceGoal.put("optGoalName", "Reduce response time");
+		performanceGoal.put("optGoalParameters", "");
+		performanceGoal.put("optGoalLevelofEnforcement", "high");
+
+		informationflowconstraints.put("flowOptimizationGoal", performanceGoal);
+
+		registrationInfo.put("informationflowconstraints", informationflowconstraints);
+	}
+	
+    /**
+     * Initialize with some args
+     */
+    public ApplicationResponse init(String[] args) {
+        try {
+            initRegistrationInfo();
+        } catch (JSONException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+
+        return new ApplicationResponse(true, "");
+
+    }
+
+    /**
+     * Start an application.
+     * This is called before run().
+     */
+    public ApplicationResponse start() {
+        init();
+
+        return new ApplicationResponse(true, "");
+    }
+
+
+    /**
+     * Stop an application.
+     * This is called to implement graceful shut down
+     * and cause run() to end.
+     */
+    public ApplicationResponse stop() {
+
+        return new ApplicationResponse(true, "");
+
+    }
+
+	public void run() {
+
+		/*System.out.println("Get NEM Registration Example");
+		JSONObject result=null;
+		try {
+			result = knowledgeManagementInterface.GetNEMRegistration(entityid);
+			System.out.println (result.toString());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (JSONException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}*/
+
+		/*System.out.println("Update NEM Registration Example");
+		try {
+			knowledgeManagementInterface.UpdateNEMRegistration(result);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (JSONException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}*/
+
+
+		System.out.println("ISNEM Information Sharing Example");
+		try {
+			JSONObject test = new JSONObject();
+			test.put("value", GenerateLocalValue("/BaseStations/Detail/All"));
+			System.out.println (knowledgeExchangeInterface.ShareInformation(entityid, "/BaseStations/Detail/All", test));
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (JSONException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
+}
+

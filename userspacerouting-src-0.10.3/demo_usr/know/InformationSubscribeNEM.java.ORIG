@@ -1,0 +1,101 @@
+package demo_usr.know;
+
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+
+import us.monoid.json.JSONArray;
+import us.monoid.json.JSONException;
+import us.monoid.json.JSONObject;
+import knowledgeblock.client.*;
+
+import usr.applications.Application;
+import usr.applications.ApplicationResponse;
+
+public class InformationSubscribeNEM extends BasicEntity implements Application {
+	// NEM info
+	int entityid = 30000;
+
+	long responseTime = 0;
+	    
+	
+	protected void initRegistrationInfo () throws JSONException {
+		registrationInfo = new JSONObject();
+		registrationInfo.put("entityid", entityid);
+		registrationInfo.put("entityname", "SUBNEM");
+
+		//required
+		JSONArray requiredArray = new JSONArray();
+		requiredArray.put("/BaseStations/Detail/All");
+		requiredArray.put("/BaseStations/LoadPerTimeZone/All");
+		registrationInfo.put("urisforsubscribedinformation", requiredArray);
+        registrationInfo.put("ircallbackURL", "http://" + restHost + ":" + restPort + "/update/");
+	}
+	
+    /**
+     * Initialize with some args
+     */
+    public ApplicationResponse init(String[] args) {
+        try {
+            initRegistrationInfo();
+        } catch (JSONException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+
+        return new ApplicationResponse(true, "");
+
+    }
+
+    /**
+     * Start an application.
+     * This is called before run().
+     */
+    public ApplicationResponse start() {
+        init();
+
+        return new ApplicationResponse(true, "");
+    }
+
+
+    /**
+     * Stop an application.
+     * This is called to implement graceful shut down
+     * and cause run() to end.
+     */
+    public ApplicationResponse stop() {
+
+        return new ApplicationResponse(true, "");
+
+    }
+
+    public void run() {
+
+		System.out.println("SUBNEM Information Subscribe Example");
+		JSONObject test = new JSONObject();
+		java.util.Date requestDate= null;
+		java.util.Date responseDate= null;
+
+	/*	while (true) {
+			try {	
+				requestDate = new java.util.Date();
+				test = knowledgeExchangeInterface.RequestInformation(entityid, "/BaseStations/Detail/All", String.valueOf(responseTime));
+				responseDate = new java.util.Date();
+				responseTime = responseDate.getTime()-requestDate.getTime();
+				System.out.println ("Response time:"+String.valueOf(responseTime));
+				System.out.println ("Retrieved value:"+test.toString());
+				System.out.println ("Waiting 5s");
+				Thread.sleep(5000);		
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}*/
+	}
+}
+

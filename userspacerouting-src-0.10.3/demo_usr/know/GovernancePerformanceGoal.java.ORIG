@@ -1,0 +1,106 @@
+package demo_usr.know;
+
+import java.io.IOException;
+
+import us.monoid.json.JSONArray;
+import us.monoid.json.JSONException;
+import us.monoid.json.JSONObject;
+import knowledgeblock.client.*;
+
+import usr.applications.Application;
+import usr.applications.ApplicationResponse;
+
+
+
+public class GovernancePerformanceGoal extends BasicEntity implements Application {
+
+	public GovernancePerformanceGoal () {
+		entityid = 10016;
+	}
+	
+	protected void initRegistrationInfo () throws JSONException {
+		registrationInfo = new JSONObject();
+		registrationInfo.put("entityid", entityid);
+		registrationInfo.put("entityname", "GOV");
+                registrationInfo.put("ifpcallbackURL", "http://" + restHost + ":" + entityid + "/update/");
+	}
+
+    /**
+     * Initialize with some args
+     */
+    public ApplicationResponse init(String[] args) {
+        try {
+            initRegistrationInfo();
+        } catch (JSONException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+
+        return new ApplicationResponse(true, "");
+
+    }
+
+    /**
+     * Start an application.
+     * This is called before run().
+     */
+    public ApplicationResponse start() {
+        init();
+
+        return new ApplicationResponse(true, "");
+    }
+
+
+    /**
+     * Stop an application.
+     * This is called to implement graceful shut down
+     * and cause run() to end.
+     */
+    public ApplicationResponse stop() {
+
+        return new ApplicationResponse(true, "");
+
+    }
+
+
+	
+    public void run() {			
+		System.out.println("Update Goal Example");
+		try {
+			
+			JSONObject performanceGoal = new JSONObject();
+			// Default goal
+			//performanceGoal.put("optGoalId", 1);
+			//performanceGoal.put("optGoalName", "Reduce response time");
+			//performanceGoal.put("optGoalParameters", "");
+			//performanceGoal.put("optGoalLevelofEnforcement", "high");
+
+			// Direct communication goal
+			performanceGoal.put("optGoalId", 3);
+			performanceGoal.put("optGoalName", "Reduce communication overhead");
+			performanceGoal.put("optGoalParameters", "");
+			performanceGoal.put("optGoalLevelofEnforcement", "high");
+			
+			System.out.println (knowledgeManagementInterface.UpdatePerformanceGoal(entityid, performanceGoal));
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (JSONException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		System.out.println("Retrieving Goal Example");
+		try {
+			System.out.println (knowledgeManagementInterface.RetrievePerformanceGoal(entityid));
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (JSONException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
+}
+

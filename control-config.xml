@@ -1,0 +1,71 @@
+<SimOptions>
+	<GlobalController>
+		<Port>8888</Port>
+<!--		<Simulation>true</Simulation> -->
+		<StartLocalControllers> true </StartLocalControllers>
+		<ConnectedNetwork> true </ConnectedNetwork>
+		<Monitoring>
+			<LatticeMonitoring> true </LatticeMonitoring>
+			<Consumer>
+				<Name>usr.globalcontroller.NetIFStatsCumulativeReporter </Name>
+			</Consumer>
+			<Consumer>
+				<Name>usr.globalcontroller.NetIFStatsReporter </Name>
+			</Consumer>
+			<Consumer>
+				<Name>usr.globalcontroller.RouterAppsReporter </Name>
+			</Consumer>
+
+ <!--
+
+			<Consumer>
+				<Name>usr.globalcontroller.NetIFStatsReporter </Name>
+			</Consumer>
+			<Consumer>
+				<Name>usr.globalcontroller.RouterAppsReporter </Name>
+			</Consumer>
+			
+
+JavaRuntimeMonitor, plugins_usr.monitoring.appl.SimpleConsumer , plugins_usr.monitoring.distribution.AbstractUSRDataPlaneConsumer -->
+		</Monitoring> 
+		<VisualizationClass>usr.globalcontroller.visualization.ColouredNetworkAndApplicationVisualization</VisualizationClass> <!--ColouredNetworkAndApplicationVisualization, ShowAPVisualization, ColouredNetworkVisualization -->
+	</GlobalController>
+
+	<LocalController>
+		<Name>host1</Name>
+		<Port>10001</Port>
+		<LowPort>11001</LowPort>
+		<HighPort>11005</HighPort>
+		<MaxRouters>2</MaxRouters>
+		<RemoteLoginUser>aneri</RemoteLoginUser>
+	</LocalController>
+	<LocalController>
+		<Name>host2</Name>
+		<Port>10002</Port>
+		<LowPort>11006</LowPort>
+		<HighPort>11010</HighPort>
+		<MaxRouters>2</MaxRouters>
+		<RemoteLoginUser>aneri</RemoteLoginUser>
+	</LocalController>
+	<LocalController>
+		<Name>host3</Name>
+		<Port>10003</Port>
+		<LowPort>11011</LowPort>
+		<HighPort>11015</HighPort>
+		<MaxRouters>2</MaxRouters>
+		<RemoteLoginUser>aneri</RemoteLoginUser>
+	</LocalController>
+	<EventEngine>
+		<Name> Probabilistic </Name> <!-- Empty, Test, Probabilistic, Script, Traffic -->
+		<EndTime>6000</EndTime >
+		<Parameters>/home/aneri/VLSP/probdists.xml</Parameters>
+	</EventEngine>
+	<EventEngine>
+		
+		<Name> BackgroundTraffic </Name> <!-- Empty, Test, Probabilistic, Script, Traffic -->
+		<EndTime>6000</EndTime >
+		<Parameters>/home/aneri/VLSP/backgroundTraffic.xml</Parameters> <!-- backgroundTraffic /home/aneri/VLSP/script.txt ,/home/aneri/VLSP/probdists.xml -->
+	</EventEngine>
+
+	<RouterOptions>/home/aneri/VLSP/routeroptions.xml</RouterOptions>
+</SimOptions>

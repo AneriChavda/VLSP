@@ -1,0 +1,23 @@
+<BackgroundTrafficEngine>
+	<TrafficArriveDist>
+		<ProbElement>
+			<Type> Uniform </Type>  <!-- Uniform, Exponential, LogNormal, or PoissonPlus -->
+			<Weight>1.0 </Weight>
+			<Parameter>100.0 </Parameter>
+		</ProbElement>
+	</TrafficArriveDist>
+	<TrafficLengthDist>
+		<ProbElement>
+			<Type> Uniform </Type>  <!-- Uniform, Exponential, LogNormal, or PoissonPlus -->
+			<Weight>1.0 </Weight>
+			<Parameter>3.0 </Parameter>
+		</ProbElement>
+	</TrafficLengthDist>
+	<TrafficSpeedDist>		
+		<ProbElement>
+			<Type> Exponential </Type>  <!-- Uniform, Exponential, LogNormal, or PoissonPlus -->
+			<Weight>1.0 </Weight>
+			<Parameter>3.0 </Parameter>
+		</ProbElement>
+	</TrafficSpeedDist> 
+</BackgroundTrafficEngine>

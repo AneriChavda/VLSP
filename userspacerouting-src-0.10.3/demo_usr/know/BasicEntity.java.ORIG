@@ -1,0 +1,341 @@
+package demo_usr.know;
+
+import java.io.IOException;
+//import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+
+import us.monoid.json.JSONException;
+import us.monoid.json.JSONObject;
+import knowledgeblock.client.Entity;
+import knowledgeblock.client.KnowledgeBlockClientRestListener;
+import knowledgeblock.client.KnowledgeExchangeInterface;
+import knowledgeblock.client.KnowledgeManagementInterface;
+import knowledgeblock.client.data.InformationExchangePolicies;
+import knowledgeblock.client.data.InformationFlowRequirementsAndConstraints.Methods;
+import knowledgeblock.client.data.KnowOptimizationGoal.OptimizationRules;
+import knowledgeblock.client.data.UMFInformationSpecifications;
+import knowledgeblock.client.KnowOptimizationGoals;
+
+import usr.net.Address;
+import usr.net.AddressFactory;
+
+
+public class BasicEntity implements Entity {
+	// NEM info
+	int entityid;
+
+	// KnowledgeManagementInterface which talks to the KnowledgeBlock
+	KnowledgeManagementInterface knowledgeManagementInterface;
+
+	// KnowledgeExchangeInterface which talks to the KnowledgeBlock
+	KnowledgeExchangeInterface knowledgeExchangeInterface;
+
+	JSONObject registrationInfo=null;
+
+	KnowledgeBlockClientRestListener restListener;
+
+	InformationExchangePolicies activeInformationExchangePolicies = null;
+	UMFInformationSpecifications activeEntityRegistration = null;
+
+	Address restHost;
+	int restPort;
+
+	String directURI = null;
+
+	HashMap<String, String> localStorage = new HashMap<String, String>();
+
+	java.util.Date requestDate= null;
+	java.util.Date responseDate= null;
+	
+	public BasicEntity () {
+            restHost = AddressFactory.getAddress();
+
+            /*
+		try {
+                    restHost = InetAddress.getLocalHost().getHostAddress();
+		} catch (UnknownHostException uhe) {
+                    restHost = AddressFactory.newAddress(0);
+		}
+            */
+	}
+
+	protected void init() {
+
+		// use entityid as port
+		restPort = entityid;
+		System.out.println ("Running rest listener:"+restPort);
+		// set up Rest Listener for callbacks
+		restListener = new KnowledgeBlockClientRestListener(this, restPort);
+		restListener.start();
+
+		// Allocate knowledgeManagementInterface
+		knowledgeManagementInterface = new KnowledgeManagementInterface("localhost", "9900");
+		knowledgeExchangeInterface = new KnowledgeExchangeInterface("localhost", "9900");
+
+		// NEM Registration example
+		while (true) {
+			// check if can talk to KnowledgeBlock
+			System.out.println("Registering entityid:"+entityid);
+			if (registerWithKnowledgeBlock(entityid)) {
+				System.out.println("Make connection with KnowledgeBlock");
+				break;
+			} else {
+				System.out.println("Cannot interact with KnowledgeBlock- retrying after 5000 ms");
+				try {
+					Thread.sleep(5000);
+				} catch (InterruptedException ie) {
+					ie.printStackTrace();
+				}
+			}
+		}
+	}
+
+	public JSONObject RequestInformation (String key) {
+		if (activeInformationExchangePolicies!=null)
+			if (activeInformationExchangePolicies.getFlowOptimizationGoal()!=null)
+				System.out.println (activeInformationExchangePolicies.getFlowOptimizationGoal().getOptGoalName());
+		// request information based on the established information flow policies
+		JSONObject result = null;
+		if (activeInformationExchangePolicies == null) {
+			// no policies set: using pull
+			System.out.println ("USING PULL");
+			try {
+				result = knowledgeExchangeInterface.RequestInformation(entityid, key);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		} else if (activeInformationExchangePolicies.getMethod()==Methods.PubSub) {
+			// using pub/sub method
+			// returning local value
+			//result = RetrieveLocalValue (key);
+			// DO NOTHING
+			System.out.println ("USING PUB/SUB (DOING NOTHING)");
+			
+			requestDate = new java.util.Date();
+
+			try {
+				result = RetrieveFromLocalStorage (key);
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			responseDate = new java.util.Date();
+			long informationRetrievalResponseTime = responseDate.getTime()-requestDate.getTime();
+			System.out.println ("Response time:"+String.valueOf(informationRetrievalResponseTime));
+			knowledgeExchangeInterface.CommunicatingStatistics (entityid, String.valueOf(informationRetrievalResponseTime));
+			
+			//communicate statistics
+		} else if (activeInformationExchangePolicies.getMethod()==Methods.NEM2NEM||(activeInformationExchangePolicies.getFlowOptimizationGoal().CheckOptimizationRule(OptimizationRules.DirectNEM2NEMCommunication))) {
+			// using direct communication method
+			System.out.println ("USING NEM2NEM");
+
+			if (directURI==null) {
+				try {
+					result = knowledgeExchangeInterface.RequestInformation(entityid, key);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (JSONException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				String tempURI=null;
+				try {
+					tempURI = result.getString("url");
+				} catch (JSONException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				if (tempURI!=null) {
+					directURI=tempURI;
+					// url provided, switching to direct mode
+					//System.out.println (test.getString("url"));
+					try {
+						result = knowledgeExchangeInterface.RequestDirectInformation(entityid, key, directURI);
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					} catch (JSONException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					//System.out.println ("Retrieved value:"+test.toString());
+				}
+			} else {
+				try {
+					result = knowledgeExchangeInterface.RequestDirectInformation(entityid, key, directURI);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (JSONException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				//System.out.println ("Retrieved value:"+test.toString());				
+			}
+		} else {
+			// using pull method (default mode)
+			System.out.println ("USING PULL");
+
+			try {
+				result = knowledgeExchangeInterface.RequestInformation(entityid, key);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		return result;
+	}
+
+	public void ShareInformation (String key, JSONObject value) {
+		// share information based on the established information flow policies
+		JSONObject result = null;
+		if (activeInformationExchangePolicies == null) {
+			// no policies set: using push
+			System.out.println ("USING PUSH");
+
+			try {
+				result = knowledgeExchangeInterface.ShareInformation(entityid, key, value);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		} else if (activeInformationExchangePolicies.getMethod()==Methods.PubSub) {
+			// using pub/sub method
+			// publishing
+			System.out.println ("USING PUB/SUB (PUBLISHING)");
+
+			try {
+				System.out.println (knowledgeExchangeInterface.PublishInformation(entityid, key, value));
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+		} else if (activeInformationExchangePolicies.getMethod()==Methods.NEM2NEM) {
+			// using direct communication method
+			// do nothing
+			System.out.println ("DIRECT NEM2NEM");
+
+		} else {
+			// using push method (default mode)
+			System.out.println ("USING PUSH");
+
+			try {
+				result = knowledgeExchangeInterface.ShareInformation(entityid, key, value);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+	}
+
+	public void InformationFlowPoliciesUpdated (JSONObject informationFlowPolicies) {
+		try {
+			activeInformationExchangePolicies = new InformationExchangePolicies (informationFlowPolicies.toString());
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		System.out.println ("Information flow policies updated:"+informationFlowPolicies+" "+activeInformationExchangePolicies.getFlowOptimizationGoal().getOptGoalName());
+		// updating goal with all values
+		if (activeInformationExchangePolicies.getFlowOptimizationGoal()!=null)
+			activeInformationExchangePolicies.setFlowOptimizationGoal(KnowOptimizationGoals.GetOptimizationGoal(activeInformationExchangePolicies.getFlowOptimizationGoal()));
+	}
+
+	public JSONObject GenerateLocalValue (String uri) {
+		JSONObject test = new JSONObject();
+		Calendar calendar = Calendar.getInstance();
+
+		try {
+			test.put("value", calendar.get(Calendar.MINUTE)+":"+calendar.get(Calendar.SECOND));
+		} catch (JSONException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		System.out.println ("Retrieving local value:"+test.toString()+" from uri:"+uri);
+
+		return test;
+	}
+
+	public void StoreInLocalStorage (String uri, String value) {
+		localStorage.put(uri, value);
+	}
+
+	public JSONObject RetrieveFromLocalStorage (String uri) throws JSONException {
+		String value = localStorage.get(uri);
+
+		JSONObject jsobj = new JSONObject();
+
+		if (value==null) {
+			jsobj.put("message", "no value pushed yet");
+			jsobj.put("output", "");
+			return jsobj;
+		} else {
+			jsobj.put("message", "last value pushed");
+			jsobj.put("output", value);
+			return jsobj;
+		}
+	}
+
+
+	/**
+	 * Register with the KB
+	 */
+	private boolean registerWithKnowledgeBlock(int entityid) {
+		// send equiv of: {"entityid":200, "urisforavailableinformation":[],"iccallbackURL":"", "urisforrequiredinformation":["/NetworkResources/WirelessNetworks/network1/Routers/router1/Interfaces/if0/Metrics/loadlevelestimation"],"ircallbackURL":"TBA","urisforknowledge":[],"knowledgebuildingrequesturls":[],"knowledgeproductiononregistration":[],"ipkpcallbackURL":""}
+
+		try {
+			// {"entityid": 5613, "urisforrequiredinformation":["/VIM/Routers/Detail/All", "/VIM/Links/Detail/All", "/VIM/Removed/"]}
+
+			JSONObject jsobj = knowledgeManagementInterface.RegisterNEM(registrationInfo);
+
+			try {
+				activeEntityRegistration = new UMFInformationSpecifications (registrationInfo.toString());
+			} catch (Exception e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+
+			System.out.println("ISNEM registrationInfo " + registrationInfo);
+			System.out.println("ISNEM registration result  " + jsobj);
+
+			// updating local informationexchange policies (RECEIVING THAT ASYNCHRONOUSLY)
+			/*try {
+				activeInformationExchangePolicies = new InformationExchangePolicies (jsobj.get("output").toString());
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}*/
+
+			if (jsobj.get("output").equals("OK"))
+				return true;
+			return false;                    
+		}  catch (IOException ioe) {
+			//ioe.printStackTrace();
+		} catch (JSONException je) {
+			je.printStackTrace();
+		}
+		return false;
+	}
+
+}

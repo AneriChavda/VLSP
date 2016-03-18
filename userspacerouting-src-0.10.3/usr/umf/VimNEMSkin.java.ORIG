@@ -1,0 +1,425 @@
+package usr.umf;
+
+import usr.globalcontroller.GlobalController;
+import usr.logging.*;
+import usr.console.Command;
+import usr.globalcontroller.command.*;
+//import java.util.concurrent.*;
+import cc.clayman.console.ManagementConsole;
+import cc.clayman.console.RequestHandler;
+import umf.common.nem.BasicNEM;
+import umf.common.nem.NEMSkin;
+import umf.common.nem.Manifest;
+import umf.common.model.*;
+import umf.common.action.*;
+import umf.common.gov.IGovernance;
+import gr.tns.RestUtil;
+import gr.tns.http.BasicContainer;
+import gr.tns.http.IRequestHandler;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.io.File;
+import java.io.IOException;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.ArrayList;
+
+
+
+/**
+ * A ManagementConsole for the GlobalController.
+ * It listens for commands.
+ * It folds USRRestConsole and AbstractRestConsole into BasicNEM
+ */
+public class VimNEMSkin extends BasicNEM implements ManagementConsole {
+    BasicContainer container;
+    int port;
+    VimNem globalController;
+
+    // HashMap of command name -> Command
+    HashMap<String, Command> commandMap;
+
+
+    /**
+     * @param manifestUri
+     * @throws ClassCastException
+     * @throws FileNotFoundException
+     * @throws MalformedURLException
+     */
+    public VimNEMSkin(URI manifestUri) throws Exception {
+        super(manifestUri);
+    }
+
+    public static VimNEMSkin create(VimNem globalController, int port) throws Exception {
+        URI manifestUri = generateExampleManifest();
+
+        VimNEMSkin nem = NEMSkin.createNew(VimNEMSkin.class, manifestUri.toString());
+
+        nem.globalController = globalController;
+        nem.port = port;
+
+        // setup the Commands
+        nem.commandMap = new HashMap<String, Command>();
+
+
+        return nem;
+    }
+
+    public GlobalController getGlobalController() {
+        return globalController;
+    }
+
+    public Object getAssociated() {
+        return globalController;
+    }
+
+    public void setAssociated(Object o) {
+        globalController = (VimNem)o;
+    }
+
+    /**
+     * Start the ManagementConsole.
+     */
+    public boolean start() {
+        try {
+            setBaseURI(new URI("http://0.0.0.0:" + port + "/"));
+            //setBaseURI(URI.create("http://localhost:" + port));
+            System.out.println("NEM should be accessible @ " + this.getBaseURI());
+
+            container = BasicNEM.bindToREST(this, port, "");
+
+
+
+            // setup default /command handler
+            defineRequestHandler("/command/", new CommandAsRestHandler());
+
+            register(new UnknownCommand());
+            register(new LocalOKCommand());
+            register(new QuitCommand());
+            register(new ShutDownCommand());
+            register(new ReportAPCommand());
+            register(new OnRouterCommand());
+            register(new GetRouterStatsCommand());
+            register(new SendRouterStatsCommand());
+
+
+
+            // check the UnknownCommand exists
+            Command unknown = find("__UNKNOWN__");
+
+            if (unknown == null) {
+                Logger.getLogger("log").logln(USR.ERROR, leadin() + "the UnknownCommand has not been registered");
+                throw new Error(leadin() + "the UnknownCommand has not been registered");
+            }
+
+
+
+
+            // setup default /router/id/app/ handler
+            defineRequestHandler("/router/[0-9]+/app/.*", new AppRestHandler());
+
+            // setup default /router/id/link/ handler
+            defineRequestHandler("/router/[0-9]+/link/.*", new RouterLinkRestHandler());
+
+            // setup default /router/ handler
+            defineRequestHandler("/router/", new RouterRestHandler());
+
+            // setup default /link/ handler
+            defineRequestHandler("/link/", new LinkRestHandler());
+
+            // setup default /ap/ handler
+            defineRequestHandler("/ap/", new AggPointRestHandler());
+
+            // setup default /removed/ handler
+            defineRequestHandler("/removed/", new RemovedRestHandler());
+
+            // setup  /kbdata/ handler which handles callbacks
+            // from the knowledgeblock
+            defineRequestHandler("/kbdata/", new KBDataHandler());
+
+            // setup  /graph/ handler which gathers version of
+            // virtual network as a graph - e.g. a dot file
+            defineRequestHandler("/graph/", new GraphRestHandler());
+
+
+            /*
+             * Now we need to notify GOV as well.
+             */
+
+            String govURL = System.getProperty("govURL");
+            System.err.println("govURL = " + govURL);
+
+            IGovernance gov = RestUtil.getHTTPProxy(govURL != null ? govURL : "http://localhost:7777/", IGovernance.class);
+            gov.onNEMLoaded(this.getBaseURI());
+
+            return true;
+
+        } catch (Throwable t) {
+            t.printStackTrace();
+            throw new Error(t.getMessage());
+            //return false;
+        }
+    }
+
+    /**
+     * Define a handler for a request
+     */
+    public void defineRequestHandler(String pattern, USRRequestHandler rh) {
+        rh.setBasePath(pattern);
+        rh.setManagementConsole(this);
+        container.addHandler(rh);
+    }
+
+    /**
+     * Register a new command with the ManagementConsole.
+     */
+    public void register(Command command) {
+        String commandName = command.getName();
+
+        command.setManagementConsole(this);
+
+        commandMap.put(commandName, command);
+
+        //Logger.getLogger("log").logln(USR.STDOUT, leadin() + "registered command " + command + " -> " + command);
+
+
+
+    }
+
+
+    /**
+     * Find a command in the ManagementConsole.
+     * @param commandName The name of the command
+     */
+    public Command find(String commandName) {
+        return commandMap.get(commandName);
+    }
+
+    /**
+     * Find a handler in the ManagementConsole.
+     * @param pattern The pattern for the handler
+     */
+    public Command findHandler(String pattern) {
+        return commandMap.get(pattern);
+    }
+
+
+    /*
+    public static URI generateExampleManifestV2() throws IOException
+    {
+        Manifest mf = new Manifest(); 
+		
+        mf.setName(VimNEMSkin.class.getCanonicalName());
+        //mf.setName("Virtual Infrastructure Management NEM");
+        mf.setProvider("University College London");
+        mf.setVersion("2.0");
+
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.DAY_OF_MONTH, 12);
+        cal.set(Calendar.MONTH, Calendar.FEBRUARY);
+        cal.set(Calendar.YEAR, 2013);
+        mf.setReleaseDate(cal.getTime());
+        mf.setFeatures("The Virtual Infrastructure Management (VIM) NEM manages a virtual infrastructure through providing management and control functions, such as virtual topologies and paths establishment, traffic monitoring and deployment of nodes providing network services (e.g. aggregation points)");
+        mf.setUserGuideURL(new URL("http://www.univerself-project.eu/support/VIMNEM"));
+		
+        mf.setAtomicLoop(true);
+        mf.setComposite(false);
+		
+        Technology tech = new Technology();
+        tech.getTechnologySpecification().add("Fixed IP");
+        mf.setTechnology(tech);  
+		
+
+        NetworkSegment seg = new NetworkSegment();
+        seg.getSegmentSpecification().add("Core");
+        mf.setNetworkSegment(seg); 
+		
+        FunctionalityFamily ff = new FunctionalityFamily();
+        ff.getFunctionality().add("Resource");
+        ff.getFunctionality().add("Energy Consumption");
+        mf.setFunctionalityFamily(ff); 
+				
+        mf.addPossibleHost(new OS("Mac OS X", "*", "*"));
+        mf.addPossibleHost(new OS("Linux OS", "*", "*"));
+        mf.addPossibleHost(new OS("Windows OS", "*", "*"));
+		
+        ManagedEntitySpecification mes = new ManagedEntitySpecification("UCL VLSOP Router");
+        List<ManagedEntitySpecification> mesList = new ArrayList<ManagedEntitySpecification>();
+        mesList.add(mes);
+        mf.setManageableEntities(mesList); 
+		
+
+        List<ManagementActionSpecification> acquiredInputs = new ArrayList<ManagementActionSpecification>(); 
+        ManagementActionSpecification acquiredInput1 = new ManagementActionSpecification();
+        acquiredInput1.setDescriptor("Get Router Statistics"); 
+        acquiredInputs.add(acquiredInput1);
+		
+        ManagementActionSpecification acquiredInput2 = new ManagementActionSpecification();
+        acquiredInput2.setDescriptor("Get Router Applications Information"); 
+        acquiredInputs.add(acquiredInput2);
+		
+        ManagementActionSpecification acquiredInput3 = new ManagementActionSpecification();
+        acquiredInput3.setDescriptor("Get Router Monitoring Configuration"); 
+        acquiredInputs.add(acquiredInput3);
+		
+        ManagementActionSpecification acquiredInput4 = new ManagementActionSpecification();
+        acquiredInput4.setDescriptor("Get Aggregation Point Configuration"); 
+        acquiredInputs.add(acquiredInput4);
+		
+        ManagementActionSpecification acquiredInput5 = new ManagementActionSpecification();
+        acquiredInput5.setDescriptor("Get Router Configuration"); 
+        acquiredInputs.add(acquiredInput5);
+		
+        ManagementActionSpecification acquiredInput6 = new ManagementActionSpecification();
+        acquiredInput6.setDescriptor("Get Router Routing Table"); 
+        acquiredInputs.add(acquiredInput6);
+		
+        ManagementActionSpecification  acquiredInput7 = new ManagementActionSpecification();
+        acquiredInput7.setDescriptor("Get Router Interfaces"); 
+        acquiredInputs.add(acquiredInput7);
+		
+        mf.setAcquiredInputs(acquiredInputs);
+
+        List<ManagementActionSpecification> availableOutputs = new ArrayList<ManagementActionSpecification>();
+		
+        ManagementActionSpecification output1 = new ManagementActionSpecification();
+        output1.setDescriptor("Optimized Aggregation Point Location");
+        availableOutputs.add(output1);
+        ManagementActionSpecification output2 = new ManagementActionSpecification();
+        output2.setDescriptor("Optimized Application Location");
+        availableOutputs.add(output2);
+        ManagementActionSpecification output3 = new ManagementActionSpecification();
+        output3.setDescriptor("Optimized Filtering");
+        availableOutputs.add(output3);
+        ManagementActionSpecification output4 = new ManagementActionSpecification(); 
+        output4.setDescriptor("Global Objective from Governance");
+        availableOutputs.add(output4);
+        mf.setAvailableOutputs(availableOutputs);
+ 
+        List<NEMActionSpecification> possibleActions = new ArrayList<NEMActionSpecification>();
+        NEMActionSpecification possibleAction1 = new NEMActionSpecification();
+        possibleAction1.setDescriptor("Create Link");
+        possibleActions.add(possibleAction1);
+        NEMActionSpecification possibleAction2 = new NEMActionSpecification();
+        possibleAction2.setDescriptor("Break Link");
+        possibleActions.add(possibleAction2);
+        NEMActionSpecification possibleAction3 = new NEMActionSpecification();
+        possibleAction3.setDescriptor("Start Router");
+        possibleActions.add(possibleAction3);
+        NEMActionSpecification possibleAction4 = new NEMActionSpecification();
+        possibleAction4.setDescriptor("Shutdown Router");
+        possibleActions.add(possibleAction4);
+        NEMActionSpecification possibleAction5 = new NEMActionSpecification();
+        possibleAction5.setDescriptor("Execute Local Command");
+        possibleActions.add(possibleAction5);
+        NEMActionSpecification possibleAction6 = new NEMActionSpecification();
+        possibleAction6.setDescriptor("Start Application");
+        possibleActions.add(possibleAction6);
+        NEMActionSpecification possibleAction7 = new NEMActionSpecification();
+        possibleAction7.setDescriptor("Stop Application");
+        possibleActions.add(possibleAction7);
+        NEMActionSpecification possibleAction8 = new NEMActionSpecification();
+        possibleAction8.setDescriptor("Start Monitoring");
+        possibleActions.add(possibleAction8);
+        NEMActionSpecification possibleAction9 = new NEMActionSpecification();
+        possibleAction9.setDescriptor("Stop Monitoring");
+        possibleActions.add(possibleAction9);
+        NEMActionSpecification possibleAction10 = new NEMActionSpecification();
+        possibleAction10.setDescriptor("Ping Command");
+        possibleActions.add(possibleAction10);
+        NEMActionSpecification possibleAction11 = new NEMActionSpecification();
+        possibleAction11.setDescriptor("Start Aggregation Point");
+        possibleActions.add(possibleAction11);
+        NEMActionSpecification possibleAction12 = new NEMActionSpecification();
+        possibleAction12.setDescriptor("Stop Aggregation Point");
+        possibleActions.add(possibleAction12);
+        NEMActionSpecification possibleAction13 = new NEMActionSpecification();
+        possibleAction13.setDescriptor("Configure Aggregation Point");
+        possibleActions.add(possibleAction13);
+        NEMActionSpecification possibleAction14 = new NEMActionSpecification();
+        possibleAction14.setDescriptor("Configure Router Statistics");
+        possibleActions.add(possibleAction14);
+        NEMActionSpecification possibleAction15 = new NEMActionSpecification();
+        possibleAction15.setDescriptor("Configure Router");
+        possibleActions.add(possibleAction15);
+        mf.setPossibleActions(possibleActions);
+		
+        ConfigurationOptions conf = new ConfigurationOptions();
+        List<SpecificNEMPolicySpec> listOfPolicies = new ArrayList<SpecificNEMPolicySpec>();
+        SpecificNEMPolicySpec policySpec1 = new SpecificNEMPolicySpec(); 
+        policySpec1.setName("Policy_00001_VIM");
+        policySpec1.setDescription("Virtual Infrastructure Management will target at the specified performance optimization goal");
+        policySpec1.setEvent("OnGovPolicyUpdate");
+        listOfPolicies.add(policySpec1);
+
+        Condition cond = new Condition();
+        cond.setConditionVariable("ID of router link to be activated/deactivated");
+        cond.setOperator("6");
+        cond.setValue(null);
+        List<Condition> listCond = new ArrayList<Condition>();
+        listCond.add(cond);
+        policySpec1.setConditions(listCond);
+        conf.setPolicySpecs(listOfPolicies);
+ 
+        mf.setConfigurationOptions(conf);
+		
+        String fname = mf.save(); 
+        return new File(fname).toURI();
+        }*/
+
+
+    public static URI generateExampleManifest() throws IOException {
+        Manifest mf = new Manifest();
+        mf.setName(VimNEMSkin.class.getCanonicalName());
+        mf.setProvider("UCL");
+        mf.setVersion("1.0");
+
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.DAY_OF_MONTH, 15);
+        cal.set(Calendar.MONTH, Calendar.MARCH);
+        cal.set(Calendar.YEAR, 2013);
+        mf.setReleaseDate(cal.getTime());
+        mf.setFeatures("Minimal manifest for an VIM NEM NEM.");
+        mf.setUserGuideURL(new URL("http://www.examplenem.com/support/VimNEM"));
+        mf.addPossibleHost(new OS("MacOS", "*", "*"));
+
+        String fname = mf.save();
+        return new File(fname).toURI();
+    }
+
+    private String leadin() {
+        return "VimNEMSkin: ";
+    }
+
+    /*
+     * Stubs
+     */
+
+
+    /**
+     * Stop the ManagementConsole.
+     */
+    public boolean stop() {
+        container.close();
+        return true;
+    }
+
+    /**
+     * Construct a ManagementConsole, given a specific port.
+     */
+    public void initialise (int port) {
+    }
+
+    public void registerCommands() {
+    }
+
+    /**
+     * Define a handler for a request
+     */
+    public void defineRequestHandler(String pattern, RequestHandler rh) {
+    }
+
+}
